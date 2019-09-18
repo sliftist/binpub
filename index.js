@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// This file cannot have carriage returns in the first line.
 const yargs = require("yargs");
 const tmp = require("tmp");
 const fs = require("fs");
@@ -15,15 +16,6 @@ const yellow = chalk.hsl(60, 100, lightness).bind(chalk);
 
 // node . init clang-wasm --bins clang --addFiles wasm-ld
 // node . add clang-wasm
-
-//todonext
-// So... I deleted all the repos. Now... start from scratch with the commands. Init should function as an updater, so start without gitSource or urlSource,
-//  and then add them later? Or... just remove them actually... You can manually edit the package.json file and readme if you want...
-// We should switch our git account again when adding the first package, just to test that.
-// And remember... go add the licenses to the github account manually, and to the package, and make sure that works fine.
-// And then... maybe deleted the x264 stuff and make that stuff this way? And test it... ugh... x264 is annoying to test, so maybe not, maybe use something else,
-//  I'm sure I have some binaries in my Downloads folder I could publish.
-//  - Well... maybe just use x264 --help. Eh...
 
 let cleanupCallbacks = [];
 
@@ -740,6 +732,7 @@ module.exports = {
 
                     try {
                         await exec("git", ["push", "--dry-run"], { cwd: gitWorkspace });
+                        // TODO: BUG: This line is being reached even when there is definitely an error (at least on OSX).
                         console.info(blue(`\nFork detected correctly.`));
                         break;
                     } catch(e) { }
