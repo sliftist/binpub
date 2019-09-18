@@ -429,6 +429,9 @@ async function add(argObj) {
         let mainBinaryName = overConfig.binaryNames[0];
 
         let binaryPath = argObj.binaryPath;
+        if(binaryPath && fs.statSync(binaryPath).isDirectory()) {
+            binaryPath += "/" + mainBinaryName;
+        }
         if(!binaryPath) {
             let where = process.platform === "win32" ? "where" : "which";
             binaryPath = run(where, [mainBinaryName]).split(/\r\n|\n/)[0];
