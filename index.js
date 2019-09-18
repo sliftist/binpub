@@ -300,7 +300,7 @@ ${sourcesEndTag}
 let path = require("./index.js").getBinaryPath("${binName}");
 let args = process.argv.slice(2);
 require("child_process").execFileSync(path, args, { stdio: "inherit" });
-`);
+`.replace(/\r/g, ""));
     }
     
 
