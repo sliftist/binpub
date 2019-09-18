@@ -83,6 +83,8 @@ yargs
     .option("versionOverrideForceUpdate", { alias: "fupdate", describe: "Sets the version to the current version of the package, with the patch version incremented by 1. This allows forceful update when the underlying version hasn't changed, but the deployed package is incorrect." })
     .option("incrementMinorVersion", { alias: "minor", description: "(FOR THE OVER PACKAGE) Increment the minor version instead of the patch version." })
     .option("incrementMajorVersion", { alias: "major", description: "(FOR THE OVER PACKAGE) Increment the major version instead of the minor or patch version." })
+
+.wrap(yargs.terminalWidth())
 .argv
 ;
 
