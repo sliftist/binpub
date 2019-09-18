@@ -414,8 +414,10 @@ async function add(argObj) {
 
         let binaryPath = argObj.binaryPath;
         if(!binaryPath) {
-            binaryPath = run("where", [mainBinaryName]).split("\n")[0];
+            binaryPath = run("where", [mainBinaryName]).split(/\r\n|\n/)[0];
             binaryPath = binaryPath.replace(/\\/g, "/");
+
+            console.log(green(`Found binary at ${binaryPath}`));
         }
 
         let newVersion = argObj.versionOverride;
