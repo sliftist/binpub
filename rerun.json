@@ -1,1 +1,1 @@
-["init","--name","clang-wasm","--repoFolder","C:\\Users\\quent\\Dropbox\\repos\\clang-wasm-bin","--gitSource","https://github.com/llvm/llvm-project.git","--urlSource","http://releases.llvm.org/download.html","--bins","clang","--addFiles","wasm-ld","--showArgs"]
+["init","clang-wasm","--showArgs"]

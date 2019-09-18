@@ -1,6 +1,6 @@
 const child_process = require("child_process");
 
-const sourceCode = require("sources");
+const sourceCode = require("./sources").sources;
 
 /** @type {
     [packageName: string]: {
@@ -26,7 +26,7 @@ let matchingSystems = Object.keys(sources).filter(infoObj => {
     return true;
 }).map(x => sources[x]);
 
-function getPackageName(name) {
+function getPackageObj() {
     if(matchingSystems.length === 0) {
         throw new Error(`Cannot find a matching release for the current system. Require ${systemSuffix}, have ${JSON.stringify(Object.keys(sources))}`);
     }
@@ -35,26 +35,32 @@ function getPackageName(name) {
     }
 
     let sourcesObj = matchingSystems[0];
-    return sourcesObj.packageName;
+    return sourcesObj;
 }
 
-function getBinaryPath(name = defaultName) {
-    let packageName = getPackageName(name);
+function getBinaryPath(name) {
+    let packageObj = getPackageObj();
+    let { packageName } = packageObj;
+    name = name || Object.keys(packageObj.binaries)[0];
     // Use eval, to allow the require to work within webpack.
     return eval("require")(packageName).getBinaryPath(name);
 }
 
-function runBinary(name = defaultName, ...args) {
+function runBinary(name, ...args) {
     let errorObj = new Error();
     let path = getBinaryPath(name);
-    let process = child_process.spawn(path, args, { capture: ["stdout", "stderr"] });
+    let proc = child_process.spawn(path, args);
     return new Promise((resolve, reject) => {
         let error = "";
-        process.stderr.on("data", (data) => {
-            error += data;
+        proc.stderr.on("data", (data) => {
+            error += data.toString();
         });
-        process.stdout.on("close", () => {
-            if(error) {
+        let data = "";
+        proc.stdout.on("data", (d) => {
+            data += d.toString();
+        });
+        proc.stdout.on("close", (code) => {
+            if(code) {
                 // Reject with an error object from the original callstack, giving us information on what
                 //  original call caused the error.
                 errorObj.message = error;
@@ -63,10 +69,10 @@ function runBinary(name = defaultName, ...args) {
                 errorObj.stack = stackArray.join("\n");
                 reject(errorObj);
             } else {
-                resolve(process.stdout.toString());
+                resolve(data + "\n" + error);
             }
         });
-        process.on("error", (err) => {
+        proc.on("error", (err) => {
             reject(err);
         });
     });
@@ -84,7 +90,7 @@ for(let binObj of matchingSystems) {
     }
 }
 
-for(let name in Object.key(binLookup)) {
+for(let name in Object.keys(binLookup)) {
     exportsObj[name] = runBinary.bind(null, name);
 }
 

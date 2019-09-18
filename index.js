@@ -12,6 +12,17 @@ const red = chalk.hsl(0, 100, lightness).bind(chalk);
 const green = chalk.hsl(120, 100, lightness).bind(chalk);
 const yellow = chalk.hsl(60, 100, lightness).bind(chalk);
 
+// node . init clang-wasm --bins clang --addFiles wasm-ld
+// node . add clang-wasm
+
+//todonext
+// So... I deleted all the repos. Now... start from scratch with the commands. Init should function as an updater, so start without gitSource or urlSource,
+//  and then add them later? Or... just remove them actually... You can manually edit the package.json file and readme if you want...
+// We should switch our git account again when adding the first package, just to test that.
+// And remember... go add the licenses to the github account manually, and to the package, and make sure that works fine.
+// And then... maybe deleted the x264 stuff and make that stuff this way? And test it... ugh... x264 is annoying to test, so maybe not, maybe use something else,
+//  I'm sure I have some binaries in my Downloads folder I could publish.
+//  - Well... maybe just use x264 --help. Eh...
 
 let cleanupCallbacks = [];
 
@@ -26,7 +37,7 @@ yargs
     init(argObj);
 })
     .required("name", { describe: "The name of the package we will create." })
-    .require("repoFolder", { describe: "Path to folder containing .git repo the for the overarching shim. Needed to maintain a list of per system packages, and to pull request new packages." })
+    .option("repoFolder", { describe: "Path to folder containing .git repo the for the overarching shim. Needed to maintain a list of per system packages, and to pull request new packages." })
     .option("incrementMinorVersion", { alias: "minor", description: "Increment the minor version instead of the patch version." })
     .option("incrementMajorVersion", { alias: "major", description: "Increment the major version instead of the minor or patch version." })
     .option("binaryNames", { alias: "bins", type: "array", default: [], describe: "Space delimited list of binary names." })
@@ -37,23 +48,33 @@ yargs
     .option("urlSource", { alias: "s", describe: "The source where the binaries are distributed, or the homepage of the project." })
     .option("showArgs", { describe: "Prints the arguments as we received them." })
 
+.command("repub [name]", "clones and then republishes the repo, not making any changes", () => {}, (argObj) => {
+    repub(argObj);
+})
+    .required("name", { describe: "The name of the package we will create." })
+    .option("repoFolder", { describe: "Path to folder containing .git repo the for the overarching shim. Needed to maintain a list of per system packages, and to pull request new packages." })
+
 .command("add [name]", "add binaries to repo", () => {}, (argObj) => {
     add(argObj).then(() => {
         for(let callback of cleanupCallbacks) {
             callback();
         }
+        // Oops... something is dangling. I think it is the spawn of the browser, even though that should have forked anyway?
+        //  Maybe it is some other exec we called?
+        process.exit();
     }, (err) => {
         console.error(err);
         for(let callback of cleanupCallbacks) {
             callback();
         }
+        process.exit();
     });
 })
     .required("name", { describe: "The package name from the overarching package." })
-    .option("binaryPath", { describe: "Path to the binary, defaults to using where to find it." })
+    .option("binaryPath", { describe: "Path to the binary, defaults to using 'where' to find it." })
     .option("workspaceFolder", { alias: "folder", describe: "A path that we can use as a workspace. We will create a folder in this and leave all of our intermediate files in that folder. Required if dontPublish is passed." })
-    .option("packageName", { describe: "The overarching package that maintains versions of this binary. Defaults to `${name}-bin`" })
-    .option("subPackageName", { describe: "The name of the new system specific package we will be creating." })
+    .option("packageName", { describe: "The overarching package that maintains versions of this binary. Defaults to name`" })
+    .option("subPackageName", { alias: "subName", describe: "The name of the new system specific package we will be creating." })
     .option("additionalFiles", { alias: "addFiles", type: "array", default: [], describe: "Space delimited list of extra file names. These can be paths, or names, in which case we search for them beside the main executable." })
     //.option("workingDirectory", { alias: "dir", describe: "Directory files will be placed in while working. If not specified an temporary directory will be used, and then deleted when done." })
     .option("dontPublish", { alias: "nopub", describe: "Suppresses publishing and pushing, allowing the user to publish manually by entering the working directory and running publish.sh." })
@@ -112,13 +133,34 @@ function groupEnd() {
     console.groupEnd();
     console.log();
 }
+function unique(array) {
+    let lookup = {};
+    for(let key of array) {
+        lookup[key] = true;
+    }
+    return Object.keys(lookup);
+}
+
+async function repub(argObj) {
+    let name = argObj.name;
+    argObj.repoFolder = argObj.repoFolder || (__dirname + "/../" + name);
+
+    let repoFolder = argObj.repoFolder + "/";
+    if(!fs.existsSync(repoFolder + ".git")) {
+        throw new Error(`Cannot find git repo at "${repoFolder + ".git"}"`);
+    }
+
+    await exec("git", ["add", "--all"], {cwd: repoFolder});
+    await exec("git", ["stash"], {cwd: repoFolder});
+    await exec("git", ["fetch"], {cwd: repoFolder});
+    await exec("git", ["merge", "-X", "theirs", "origin/master"], { cwd: repoFolder });
+    await exec("npm", ["publish"], {cwd: repoFolder});
+}
 
 async function init(argObj) {
     let name = argObj.name;
-    if(name.endsWith("-bin")) {
-        throw new Error(`Name should not end with -bin (that is a suffix that is automatically added). Name was ${name}`);
-    }
 
+    argObj.repoFolder = argObj.repoFolder || (__dirname + "/../" + name);
 
     let repoFolder = argObj.repoFolder + "/";
     if(!fs.existsSync(repoFolder + ".git")) {
@@ -142,9 +184,8 @@ require("child_process").execFileSync("node", args, { stdio: "inherit" });`
 );
 
 
-    let packageName = name + "-bin";
+    let packageName = name;
     let packagePath = repoFolder + "package.json";
-    let binaryNames = argObj.binaryNames;
 
 
     let packageObj = {};
@@ -171,8 +212,13 @@ require("child_process").execFileSync("node", args, { stdio: "inherit" });`
     packageObj.description = packageObj.description || `Binary publish of ${name}.`;
     packageObj.main = packageObj.main || "index.js";
 
-    packageObj.binaryNames = binaryNames;
-    packageObj.additionalFiles = argObj.additionalFiles;
+    packageObj.binaryNames = packageObj.binaryNames || [];
+    packageObj.binaryNames = unique(packageObj.binaryNames.concat(argObj.binaryNames));
+    let binaryNames = packageObj.binaryNames;
+
+
+    packageObj.additionalFiles = packageObj.additionalFiles || [];
+    packageObj.additionalFiles = unique(packageObj.additionalFiles.concat(argObj.additionalFiles));
 
     let files = packageObj.files || [];
 
@@ -195,7 +241,7 @@ require("child_process").execFileSync("node", args, { stdio: "inherit" });`
         packageObj.repository = repoPath;
     }
     if(!packageObj.author) {
-        let name = run("git", ["config", "user.name"])
+        let name = run("git", ["config", "--global", "user.name"])
         let email = run("git", ["config", "user.email"]);
         packageObj.author = `${name} <${email}>`;
     }
@@ -213,7 +259,8 @@ require("child_process").execFileSync("node", args, { stdio: "inherit" });`
 
     if(!fs.existsSync(sourcesPath)) {
         fs.writeFileSync(sourcesPath, 
-`export function sources() {
+`module.exports = {};
+module.exports.sources = function sources() {
     /** @type {
         [packageName: string]: {
             // Ex, { platform: "win32", arch: "x64" }. Every key is mapped to process[key]
@@ -227,14 +274,14 @@ require("child_process").execFileSync("node", args, { stdio: "inherit" });`
             }
         }
     } */
-    let sourcesObj = (
+    return (
         // Autogenerated. Don't modify this manually.
 ${sourcesStartTag}
 { }
 ${sourcesEndTag}
     )
     ;
-}`);
+};`);
     }
 
     packageObj.bin = packageObj.bin || {};
@@ -248,7 +295,7 @@ ${sourcesEndTag}
         fs.writeFileSync(repoFolder + "/" + jsName,
 `#!/usr/bin/env node
 let path = require("./index.js").getBinaryPath("${binName}");
-let args = process.argv.slice(1);
+let args = process.argv.slice(2);
 require("child_process").execFileSync(path, args, { stdio: "inherit" });
 `);
     }
@@ -291,9 +338,9 @@ npm publish`
 
 async function add(argObj) {
     let name = argObj.name;
-    if(name.endsWith("-bin")) {
-        throw new Error(`Name should not end with -bin (that is a suffix that is automatically added). Name was ${name}`);
-    }
+
+
+    argObj.workspaceFolder = argObj.workspaceFolder || (require("os").tmpdir());
 
     let workspace = require("path").resolve(argObj.workspaceFolder).replace(/\\/g, "/") + "/";
     if(!workspace) {
@@ -308,7 +355,7 @@ async function add(argObj) {
         fs.mkdirSync(workspace);
     }
 
-    let overPackageName = name + "-bin";
+    let overPackageName = name;
     // We remove everything after the first -, because of npm spack detection.
     //  https://stackoverflow.com/questions/48668389/npm-publish-failed-with-package-name-triggered-spam-detection
     let subpackageName = argObj.subPackageName || (name.split(/-/g)[0] + "-" + process.platform + "-" + process.arch);
@@ -387,7 +434,7 @@ async function add(argObj) {
         subConfig.version = newVersion;
 
         if(!subConfig.author) {
-            let name = run("git", ["config", "user.name"])
+            let name = run("git", ["config", "--global", "user.name"]);
             let email = run("git", ["config", "user.email"]);
             subConfig.author = `${name} <${email}>`;
         }
@@ -461,9 +508,12 @@ module.exports = {
 
     
     let overRepo = overConfig.repository.url;
+    let userName = run("git", ["config", "--global", "user.name"]);
+
+    console.log(green(`Found git username as "${userName}", assuming this is your github username (if it isn't, the next few steps won't work properly). You can change it with "git config --global user.name 'your-preferred-username'".`));
+
     console.group(blue(`Syncing base repo (${overRepo})`));
-    let userName = run("git", ["config", "user.name"]);
-    let usersForkUrl = `git@github.com:${userName}/${name}-bin.git`;
+    let usersForkUrl = `git@github.com:${userName}/${name}.git`;
     let gitWorkspace;
     {
         {
@@ -572,6 +622,8 @@ module.exports = {
 
         // Also update the package.json in gitWorkspace, to have subpackageName as an optional dependency.
         gitConfig.optionalDependencies = gitConfig.optionalDependencies || {};
+        // Explicit version, as it is unlikely random binaries are even semver.
+        // TODO: Add an option to not use an explicit verison, and to not even update the version!
         gitConfig.optionalDependencies[subpackageName] = subConfig.version;
 
         // And increment the version in gitWorkspace.
@@ -631,7 +683,7 @@ module.exports = {
             if(!launchBrowserCommand) {
                 console.log(error(`Cannot launch a browser. Ensure ${usersForkUrl} exists, as we failed to push to ${overRepo} and so setup pushing to a fork (that doesn't appear to exist) at ${usersForkUrl}.`));
             } else {
-                while(!originRepoExists) {
+                while(true) {
                     console.log(blue(`\nYou must make a fork of the underlying repo to make your changes. A browser will be opened in a few seconds. CLICK FORK, come back here, and press enter.`));
                     await new Promise(resolve => setTimeout(resolve, 3000));
                     
@@ -640,7 +692,9 @@ module.exports = {
                         //  but got another application to. So... ignore that, only complain about an error if we get an error message.
                         let proc = child_process.spawnSync(launchBrowserCommand.cmd, launchBrowserCommand.args.map(x => x.replace(/URL_PLACEHOLDER/g, repoGithubUrl)));
                         let error = proc.stderr.toString();
-                        throw error;
+                        if(error) {
+                            throw error;
+                        }
                     } catch(e) {
                         console.log(e);
                         console.log(red(`Failed to launch a browser. Ensure ${usersForkUrl} exists, as we failed to push to ${overRepo} and so setup pushing to a fork (that doesn't appear to exist) at ${usersForkUrl}.`));
@@ -651,10 +705,9 @@ module.exports = {
 
                     try {
                         await exec("git", ["push", "--dry-run"], { cwd: gitWorkspace });
-                        originRepoExists = true;
+                        console.info(blue(`\nFork detected correctly.`));
+                        break;
                     } catch(e) { }
-
-                    console.info(blue(`\nFork detected correctly.`));
                 }
             }
         }
@@ -664,22 +717,28 @@ module.exports = {
     }
 
 
-    if(usersForkUrl !== overRepo) {
-        console.group(blue("Pushing to fork"));
-        await exec("git", ["push"], { cwd: gitWorkspace });
-        groupEnd();
+    if(!argObj.dontPublish && !versionUnchanged) {
+        // We will be calling npm publish right away, which fails so frequently due to spam detect that is pays to delay
+        //  the push until we know the npm publish worked.
+    } else {
+        if(usersForkUrl !== overRepo) {
+            console.group(blue("Pushing to fork"));
+            await exec("git", ["push"], { cwd: gitWorkspace });
+            groupEnd();
+        }
     }
 
 
     console.group(blue(`Publishing`));
     {
         if(versionUnchanged) {
-            console.log(yellow(`Package version has not changed (${subConfig.version}). We can't publish unless the version changes. Pass --fupdate to forcefully update the version (but warning, this will cause the version to differ from the underlying binary version, creating a new version that is only meaningful within npm).`));
+            console.log(yellow(`Package version has not changed (${subConfig.version}). We can't publish unless the version changes. Use --subName to use a different name OR pass --fupdate to forcefully update the version (but warning, this will cause the version to differ from the underlying binary version, creating a new version that is only meaningful within npm).`));
         }
 
         if(!argObj.dontPublish) {
             if(!versionUnchanged) {
                 await exec("npm", ["publish", `"${subWorkspace}"`], { });
+                await exec("git", ["push"], { cwd: gitWorkspace });
             }
             if(pullRequestUrl) {
                 if(launchBrowserCommand) {
@@ -708,11 +767,8 @@ module.exports = {
     }
     groupEnd();
 
-    // Oops... something is dangling. I think it is the spawn of the browser, even though that should have forked anyway? Maybe it is some
-    //  other exec we called?
-    process.exit();
-
-
+    
+    
     
 
 
