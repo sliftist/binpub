@@ -7,7 +7,6 @@ const child_process = require("child_process");
 const simpleGit = require("simple-git");
 const chalk = require("chalk");
 
-
 const lightness = 58;
 const blue = chalk.hsl(235, 100, lightness).bind(chalk);
 const red = chalk.hsl(0, 100, lightness).bind(chalk);
@@ -21,9 +20,6 @@ let cleanupCallbacks = [];
 
 const sourcesStartTag = `// AUTO_GENERATED_SOURCES_START`;
 const sourcesEndTag = `// AUTO_GENERATED_SOURCES_END`;
-
-//todonext
-// Actually... change the info we add to sources so the package name is irrelevant.
 
 yargs
 .command("init [name]", "initialize the repo", () => {}, (argObj) => {
