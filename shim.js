@@ -18,17 +18,20 @@ const sourceCode = require("./sources").sources;
 let sources = sourceCode();
 // Get the valid config object for the current system.
 
+let currentSystemObjForDebug = {};
+
 // Also exists in index.js.
 let matchingSystems = Object.keys(sources).filter(infoObj => {
     for(let key in infoObj.jsSystemInfo) {
-        if(infoObj[key] !== process[key]) return false;
+        currentSystemObjForDebug[key] = process[key];
+        if(infoObj.jsSystemInfo[key] !== process[key]) return false;
     }
     return true;
 }).map(x => sources[x]);
 
 function getPackageObj() {
     if(matchingSystems.length === 0) {
-        throw new Error(`Cannot find a matching release for the current system. Require ${systemSuffix}, have ${JSON.stringify(Object.keys(sources))}`);
+        throw new Error(`Cannot find a matching release for the current system. Require a match in ${JSON.stringify(Object.keys(sources).map(x => x.jsSystemInfo))}, have ${JSON.stringify(currentSystemObjForDebug)}`);
     }
     if(matchingSystems.length > 1) {
         console.error(`Found more than one matching release for the current system. Found ${JSON.stringify(matchingSystems)}. Defaulting to the first one.`);
