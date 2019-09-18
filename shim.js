@@ -21,17 +21,17 @@ let sources = sourceCode();
 let currentSystemObjForDebug = {};
 
 // Also exists in index.js.
-let matchingSystems = Object.keys(sources).filter(infoObj => {
+let matchingSystems = Object.values(sources).filter(infoObj => {
     for(let key in infoObj.jsSystemInfo) {
         currentSystemObjForDebug[key] = process[key];
         if(infoObj.jsSystemInfo[key] !== process[key]) return false;
     }
     return true;
-}).map(x => sources[x]);
+});
 
 function getPackageObj() {
     if(matchingSystems.length === 0) {
-        throw new Error(`Cannot find a matching release for the current system. Require a match in ${JSON.stringify(Object.keys(sources).map(x => x.jsSystemInfo))}, have ${JSON.stringify(currentSystemObjForDebug)}`);
+        throw new Error(`Cannot find a matching release for the current system. Require a match in ${JSON.stringify(Object.values(sources).map(x => x.jsSystemInfo))}, have ${JSON.stringify(currentSystemObjForDebug)}`);
     }
     if(matchingSystems.length > 1) {
         console.error(`Found more than one matching release for the current system. Found ${JSON.stringify(matchingSystems)}. Defaulting to the first one.`);
