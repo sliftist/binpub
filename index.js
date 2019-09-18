@@ -6,75 +6,11 @@ const simpleGit = require("simple-git");
 const chalk = require("chalk");
 
 
-const lightness = 55;
+const lightness = 58;
 const blue = chalk.hsl(235, 100, lightness).bind(chalk);
 const red = chalk.hsl(0, 100, lightness).bind(chalk);
 const green = chalk.hsl(120, 100, lightness).bind(chalk);
 const yellow = chalk.hsl(60, 100, lightness).bind(chalk);
-
-/*
-let streamProxy = new Proxy({
-    on() {
-        console.log("on", arguments);
-    },
-    once() {
-        console.log("once", arguments);
-    },
-    write(text) {
-        console.log(JSON.stringify(text.toString()));
-    },
-    emit(text) {
-        console.log(JSON.stringify(text.toString()));
-    },
-    _events: {
-        resize() { }
-    },
-    columns: 50,
-    _handle: process.stdout._handle,
-    _readableState: process.stdout._readableState,
-    pause() { }
-}, {
-    get(context, key) {
-        if(key in context) {
-            return context[key];
-        }
-        console.log(`Accessed ${key}`);
-        return undefined;
-    }
-});
-
-let rawWrite = false;
-process.stdout.write = (function (baseFnc) {
-    return function(text) {
-        if(!rawWrite) {
-            rawWrite = true;
-            try {
-                return console.log("text", String(text));
-            } finally {
-                rawWrite = false;   
-            }
-        }
-        return baseFnc.apply(this, arguments);
-    }
-})(process.stdout.write);
-
-
-
-(async () => {
-    //console.log("handle", process.stdout._handle);
-
-    //process.stdout._handle.columns = 10;
-    //console.log(process.stdout._handle.columns);
-
-    console.group();
-    let proc = child_process.spawn("ls", [], { shell: true, stdio: ["pipe", "pipe", "pipe"] });
-    //let proc = child_process.spawn("tput", ["cols"], { shell: true, stdio: ["pipe", streamProxy, "pipe"] });
-    //proc.stdout.pipe(streamProxy);
-    proc.stdout.pipe(process.stdout);
-    await new Promise((resolve) => proc.on("close", resolve));
-    console.groupEnd();
-})();
-*/
 
 
 let cleanupCallbacks = [];
@@ -143,8 +79,38 @@ function Deferred() {
 function run(name, args, options = {}) {
     return child_process.execFileSync(name, args, options).toString().trim();
 }
-function runInline(name, args, options) {
-    child_process.execFileSync("bash", args, { ...options, shell: true, stdio: "inherit" });
+async function exec(name, args, options = {}) {
+    let proc = child_process.execFile(name, args, { ...options, shell: true, stdio: ["inherit", "pipe", "pipe"] });
+    proc.stdout.on("data", data => {
+        console.log(data);
+    });
+    proc.stdout.on("error", data => {
+        console.log(data);
+    });
+    proc.stderr.on("data", data => {
+        console.log(data);
+    });
+    proc.stderr.on("error", data => {
+        console.log(data);
+    });
+    
+    await new Promise((resolve, reject) => {
+        proc.on("error", (err) => {
+            reject(err);
+        });
+        proc.on("exit", (code) => {
+            if(code) {
+                reject(code);
+            } else {
+                resolve();
+            }
+        });
+    });
+}
+
+function groupEnd() {
+    console.groupEnd();
+    console.log();
 }
 
 async function init(argObj) {
@@ -317,7 +283,7 @@ npm publish`
     );
     if(!argObj.dontPublish) {
         console.log(`Publishing (running "bash ${publishPath}")`);
-        child_process.execFileSync("bash", [publishPath], { cwd: repoFolder, shell: true, stdio: "inherit" });
+        await exec("bash", [publishPath], { cwd: repoFolder });
     } else {
         console.log(`Not publishing (run "bash ${publishPath}" to publish)`);
     }
@@ -343,8 +309,9 @@ async function add(argObj) {
     }
 
     let overPackageName = name + "-bin";
-    // https://stackoverflow.com/questions/48668389/npm-publish-failed-with-package-name-triggered-spam-detection
-    let subpackageName = argObj.subPackageName || (name + process.platform + process.arch);
+    // We remove everything after the first -, because of npm spack detection.
+    //  https://stackoverflow.com/questions/48668389/npm-publish-failed-with-package-name-triggered-spam-detection
+    let subpackageName = argObj.subPackageName || (name.split(/-/g)[0] + "-" + process.platform + "-" + process.arch);
     workspace = workspace + "/" + subpackageName + "_workspace/";
     
     if(!fs.existsSync(workspace)) {
@@ -358,13 +325,14 @@ async function add(argObj) {
             fs.writeFileSync(workspace + "/package.json", "{}");
         }
 
-        child_process.execFileSync("npm", ["install", "--save", overPackageName + "@latest"], { cwd: workspace, shell: true, stdio: "inherit" });
+        await exec("npm", ["install", "--save", overPackageName + "@latest"], { cwd: workspace });
 
         overConfig = JSON.parse(fs.readFileSync(workspace + "/node_modules/" + overPackageName + "/package.json"));
     }
-    console.groupEnd();
+    groupEnd();
 
 
+    let versionUnchanged = false;
     let subConfig = {};
     let binaryNamesMap = {};
     let subWorkspace = require("path").resolve(workspace + "/node_modules/" + subpackageName + "/").replace(/\\/g, "/") + "/";
@@ -372,7 +340,7 @@ async function add(argObj) {
     {
         let foundSubpackage = false;
         try {
-            child_process.execFileSync("npm", ["install", "--save", subpackageName  + "@latest"], { cwd: workspace, shell: true, stdio: "inherit" });
+            await exec("npm", ["install", "--save", subpackageName  + "@latest"], { cwd: workspace });
             foundSubpackage = true;
         } catch(e) {
             console.log(yellow(`\nCould not find previous version of this subpackage. Assuming this is the first version.`));
@@ -411,7 +379,11 @@ async function add(argObj) {
             newVersion = versionOutput.match(/([0-9]\.)*[0-9]/)[0];
         }
 
+
         subConfig.description = `Autogenerated package.json for ${name} (only redistribution of the binaries as an npm package, not affiliated with the project in any way).`
+        if(subConfig.version === newVersion) {
+            versionUnchanged = true;
+        }
         subConfig.version = newVersion;
 
         if(!subConfig.author) {
@@ -483,7 +455,7 @@ module.exports = {
         fs.writeFileSync(subWorkspace + "/package.json", JSON.stringify(subConfig, null, 4));
 
     }
-    console.groupEnd();
+    groupEnd();
 
 
 
@@ -497,7 +469,7 @@ module.exports = {
         {
             let repoName = overRepo.split(/[\.\/]/g).slice(-2)[0];
             if(!fs.existsSync(workspace + "/" + repoName + "/.git")) {
-                child_process.execFileSync("git", ["clone", overRepo], { cwd: workspace, shell: true, stdio: "inherit" });
+                await exec("git", ["clone", overRepo], { cwd: workspace });
             }
             gitWorkspace = require("path").resolve(workspace + "/" + repoName + "/").replace(/\\/g, "/") + "/";
         }
@@ -517,8 +489,8 @@ module.exports = {
         }
 
         // Clean up any previous pending changes
-        child_process.execFileSync("git", ["add", "--all"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
-        child_process.execFileSync("git", ["stash"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+        await exec("git", ["add", "--all"], { cwd: gitWorkspace });
+        await exec("git", ["stash"], { cwd: gitWorkspace });
 
         // Set up remotes
 
@@ -526,8 +498,8 @@ module.exports = {
         try {
             // TODO: Make a dummy branch and dry run pushing that? Because this can fail for many reasons, not just
             //  not being allowed to push to current origin.
-            child_process.execFileSync("git", ["pull"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
-            child_process.execFileSync("git", ["push", "--dry-run"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+            await exec("git", ["pull"], { cwd: gitWorkspace });
+            await exec("git", ["push", "--dry-run"], { cwd: gitWorkspace });
             hasPushAccessToCurrentOrigin = true;
         } catch(e) { }
 
@@ -539,7 +511,7 @@ module.exports = {
 
         // Forcefully make us identical to either origin or upstream, and then merge upstream into ours.
         {
-            child_process.execFileSync("git", ["fetch", "upstream"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+            await exec("git", ["fetch", "upstream"], { cwd: gitWorkspace });
 
             // We throw out anything that is only local. But we need to preserve anything that is specific to the fork (but has been pushed),
             //  as they might have already made some changes, and want to add to those changes.
@@ -549,12 +521,12 @@ module.exports = {
             // Either become exactly the origin, or exactly the upstream.
             let didResetToOrigin = false;
             try {
-                child_process.execFileSync("git", ["fetch", "origin"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
-                child_process.execFileSync("git", ["reset", "--hard", "origin/master"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+                await exec("git", ["fetch", "origin"], { cwd: gitWorkspace });
+                await exec("git", ["reset", "--hard", "origin/master"], { cwd: gitWorkspace });
                 didResetToOrigin = true;
             } catch(e) { }
             if(!didResetToOrigin) {
-                child_process.execFileSync("git", ["reset", "--hard", "upstream/master"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+                await exec("git", ["reset", "--hard", "upstream/master"], { cwd: gitWorkspace });
             }
 
             // This is basically just a temporary repo, so there is no reason to keep local changes, always take remote changes.
@@ -563,10 +535,10 @@ module.exports = {
             //  - Also, TODO: Maybe just make a remote script that makes the pull request, from an automated account, as we want to lower the barrier
             //      to making pull requests, and with a remote script we could get rid of the need to make a github account, or to even have git
             //      (they would still need npm and an npm account though... although maybe we could automate that too?).
-            child_process.execFileSync("git", ["merge", "-X", "theirs", "upstream/master"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+            await exec("git", ["merge", "-X", "theirs", "upstream/master"], { cwd: gitWorkspace });
         }
     }
-    console.groupEnd();
+    groupEnd();
 
 
     console.group(blue(`Updating base repo config to point to our package`));
@@ -618,28 +590,28 @@ module.exports = {
 
         fs.writeFileSync(gitWorkspace + "package.json", JSON.stringify(gitConfig, null, 4));
     }
-    console.groupEnd();
+    groupEnd();
 
-    console.group(blue(`Setting up pull request to base repo`));
+    console.group(blue(`Make change commit`));
     {
-        child_process.execFileSync("git", ["add", "--all"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+        await exec("git", ["add", "--all"], { cwd: gitWorkspace });
         let statusText = run("git", ["status", "--porcelain"], { cwd: gitWorkspace }).trim();
         if(statusText) {
-            child_process.execFileSync("git", ["commit", "-m", `"Version ${subConfig.version}"`], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+            await exec("git", ["commit", "-m", `"Version ${subConfig.version}"`], { cwd: gitWorkspace });
         }
     }
-    console.groupEnd();
+    groupEnd();
 
     let pullRequestUrl = "";
+    let launchBrowserCommand = undefined;
     if(usersForkUrl !== overRepo) {
         console.group(blue(`Setting up pull request to base repo`));
         let originRepoExists = false;
         try {
-            child_process.execFileSync("git", ["push", "--dry-run"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+            await exec("git", ["push", "--dry-run"], { cwd: gitWorkspace });
             originRepoExists = true;
         } catch(e) { }
 
-        let launchBrowserCommand = undefined;
         if(process.platform === "win32") {
             launchBrowserCommand = { cmd: "explorer", args: ["URL_PLACEHOLDER"] };
         } else if (process.platform === "darwin") {
@@ -648,11 +620,11 @@ module.exports = {
             launchBrowserCommand = { cmd: "xdg-open", args: ["URL_PLACEHOLDER"] };
         }
 
+        let urlParsed = overRepo.slice(0, -".git".length);
+        let urlParts = urlParsed.split("/").slice(-2);
+        let overUserName = urlParts[0];
+        let overName = urlParts[1];
         if(!originRepoExists) {
-            let urlParsed = overRepo.slice(0, -".git".length);
-            let urlParts = urlParsed.split("/").slice(-2);
-            let overUserName = urlParts[0];
-            let overName = urlParts[1];
 
             let repoGithubUrl = `https://github.com/${overUserName}/${overName}`;
             
@@ -678,7 +650,7 @@ module.exports = {
                     await new Promise(resolve => process.stdin.once("data", resolve));
 
                     try {
-                        child_process.execFileSync("git", ["push", "--dry-run"], { cwd: gitWorkspace, shell: true, stdio: "inherit" });
+                        await exec("git", ["push", "--dry-run"], { cwd: gitWorkspace });
                         originRepoExists = true;
                     } catch(e) { }
 
@@ -687,35 +659,54 @@ module.exports = {
             }
         }
 
-        pullRequestUrl = `https://github.com/${userName}/${name}/pulls`;
+        pullRequestUrl = `https://github.com/${userName}/${overName}/pulls`;
+        groupEnd();
     }
-    console.groupEnd();
+
+
+    if(usersForkUrl !== overRepo) {
+        console.group(blue("Pushing to fork"));
+        await exec("git", ["push"], { cwd: gitWorkspace });
+        groupEnd();
+    }
 
 
     console.group(blue(`Publishing`));
     {
+        if(versionUnchanged) {
+            console.log(yellow(`Package version has not changed (${subConfig.version}). We can't publish unless the version changes. Pass --fupdate to forcefully update the version (but warning, this will cause the version to differ from the underlying binary version, creating a new version that is only meaningful within npm).`));
+        }
+
         if(!argObj.dontPublish) {
-            child_process.execFileSync("npm", ["publish", `"${subWorkspace}"`], { shell: true, stdio: "inherit" });
+            if(!versionUnchanged) {
+                await exec("npm", ["publish", `"${subWorkspace}"`], { });
+            }
             if(pullRequestUrl) {
                 if(launchBrowserCommand) {
-                    console.info(green(`NPM package created called ${subpackageName}, and fork pushed to. Opening pull request page at ${pullRequestUrl}`));
+                    console.log(green(`NPM package created called ${subpackageName}, and fork pushed to. Opening pull request page at ${pullRequestUrl}`));
                     child_process.spawnSync(launchBrowserCommand.cmd, launchBrowserCommand.args.map(x => x.replace(/URL_PLACEHOLDER/g, pullRequestUrl)));
                 } else {
-                    console.info(yellow(`\nNPM package created called ${subpackageName}, and fork pushed to. YOU MUST MANUALLY PULL REQUEST the main repo at ${pullRequestUrl}`));
+                    console.log(yellow(`\nNPM package created called ${subpackageName}, and fork pushed to. YOU MUST MANUALLY PULL REQUEST the main repo at ${pullRequestUrl}`));
                 }
             } else {
-                child_process.execFileSync("git", ["push"], { shell: true, stdio: "inherit", cwd: gitWorkspace });
+                await exec("git", ["push"], { cwd: gitWorkspace });
 
                 console.log(green(`\nNPM package created called ${subpackageName}, and repo ${overRepo} pushed to.`));
             }
         } else {
-            console.log(green(`Done setup. Run:\nnpm publish ${subWorkspace}\nto publish package, create a pull request at\n${pullRequestUrl}`));
-            console.log(blue(`\tnpm publish ${subWorkspace})`));
-            console.log(green(`to publish package, create a pull request at`));
-            console.log(blue(`\t${pullRequestUrl})`));
+            console.log(green(`Done setup. Publish the sub package with`));
+            console.log(blue(`\tnpm publish ${subWorkspace}`));
+            if(usersForkUrl === overRepo) {
+                console.log(green(`Push to the main repo with`));
+                console.log(blue(`\tcd "${gitWorkspace}" && git push`));
+            }
+            else {
+                console.log(green(`Pull request it to the main repo with`));
+                console.log(blue(`\t${pullRequestUrl}`));
+            }
         }
     }
-    console.groupEnd();
+    groupEnd();
 
     // Oops... something is dangling. I think it is the spawn of the browser, even though that should have forked anyway? Maybe it is some
     //  other exec we called?
