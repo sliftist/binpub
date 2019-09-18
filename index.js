@@ -434,7 +434,7 @@ async function add(argObj) {
         }
         if(!binaryPath) {
             if(fs.existsSync("./" + mainBinaryName)) {
-                binaryPath = path.resolve("./").replace(/\\/g, "/") + "/" + mainBinaryName;
+                binaryPath = require("path").resolve("./").replace(/\\/g, "/") + "/" + mainBinaryName;
             }
         }
         if(!binaryPath) {
