@@ -60,7 +60,7 @@ yargs
     });
 })
     .required("name", { describe: "The package name from the overarching package." })
-    .option("binaryPath", { describe: "Path to the binary, defaults to using 'where/which' to find it." })
+    .option("binaryPath", { describe: "Path to the binary (or directory of the binary), defaults to using the current directory, and then using 'where/which' to find it." })
     .option("workspaceFolder", { alias: "folder", describe: "A path that we can use as a workspace. We will create a folder in this and leave all of our intermediate files in that folder. Required if dontPublish is passed." })
     .option("packageName", { describe: "The overarching package that maintains versions of this binary. Defaults to name`" })
     .option("subPackageName", { alias: "subName", describe: "The name of the new system specific package we will be creating." })
@@ -431,6 +431,11 @@ async function add(argObj) {
         let binaryPath = argObj.binaryPath;
         if(binaryPath && fs.statSync(binaryPath).isDirectory()) {
             binaryPath += "/" + mainBinaryName;
+        }
+        if(!binaryPath) {
+            if(fs.existsSync("./" + mainBinaryName)) {
+                binaryPath = path.resolve("./").replace(/\\/g, "/") + "/" + mainBinaryName;
+            }
         }
         if(!binaryPath) {
             let where = process.platform === "win32" ? "where" : "which";
