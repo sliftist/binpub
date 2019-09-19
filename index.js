@@ -214,11 +214,10 @@ require("child_process").execFileSync("node", args, { stdio: "inherit" });`
     let files = packageObj.files || [];
 
     let sourcesPath = repoFolder + "sources.js";
-    let shimPath = repoFolder + "index.js";
     let readmePath = repoFolder + "README.md";
     // (Don't publish the publish path file)
     let publishPath = repoFolder + "publish.sh";
-    files.push("sources.js", "index.js", "README.md");
+    files.push("sources.js", "README.md");
 
     
     let gitObj = simpleGit(repoFolder);
@@ -292,7 +291,21 @@ require("child_process").execFileSync(path, args, { stdio: "inherit" });
     }
     
 
-    fs.copyFileSync(__dirname + "/" + "shim.js", shimPath);
+    fs.copyFileSync(__dirname + "/" + "shim.js", repoFolder + "index.js");
+    // Redundant, but I believe only because main = index.js, not because index.js is included by default (
+    //  so it is best to keep it here, in case index.js changes).
+    files.push("index.js");
+
+    let typings = [];
+    typings.push("export function run(... args: string[]): Promise<string>;");
+    typings.push("export function getBinaryPath(binaryName: string): string;");
+    typings.push("export function runBinary(binaryName: string, ...args: string[]): Promise<string>;");
+    for(let binName of binaryNames) {
+        typings.push(`export function ${binName}(...args: string[]): Promise<string>;`);
+    }
+
+    fs.writeFileSync(repoFolder + "index.d.ts", typings.join("\n"));
+    files.push("index.d.ts");
 
     packageObj.urlSource = packageObj.urlSource || argObj.urlSource;
     packageObj.gitSource = packageObj.gitSource || argObj.gitSource;

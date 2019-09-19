@@ -85,6 +85,7 @@ let exportsObj = {
     getBinaryPath,
     runBinary
 };
+exportsObj.run = runBinary.bind(null, undefined);
 
 let binLookup = {};
 for(let binObj of matchingSystems) {
@@ -93,10 +94,8 @@ for(let binObj of matchingSystems) {
     }
 }
 
-for(let name in Object.keys(binLookup)) {
+for(let name of Object.keys(binLookup)) {
     exportsObj[name] = runBinary.bind(null, name);
 }
-
-exportsObj.run = runBinary.bind(null, undefined);
 
 module.exports = exportsObj;
