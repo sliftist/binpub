@@ -466,7 +466,7 @@ async function add(argObj) {
 
         if(!subConfig.author) {
             let name = run("git", ["config", "--global", "user.name"]);
-            let email = run("git", ["config", "user.email"]);
+            let email = run("git", ["config", "--global", "user.email"]);
             subConfig.author = `${name} <${email}>`;
         }
 
