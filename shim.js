@@ -45,6 +45,10 @@ function getBinaryPath(name) {
     let packageObj = getPackageObj();
     let { packageName } = packageObj;
     name = name || Object.keys(packageObj.binaries)[0];
+
+    // TODO: Use require.resolve, and then we won't need to add any data into the package shim. We will still
+    //  need to eval to get it to work with webpack though.
+
     // Use eval, to allow the require to work within webpack.
     return eval("require")(packageName).getBinaryPath(name);
 }
