@@ -134,7 +134,7 @@ function unique(array) {
 
 async function repub(argObj) {
     let name = argObj.name;
-    argObj.repoFolder = argObj.repoFolder || (__dirname + "/../" + name);
+    argObj.repoFolder = argObj.repoFolder || process.cwd();
 
     let repoFolder = argObj.repoFolder + "/";
     if(!fs.existsSync(repoFolder + ".git")) {
@@ -151,7 +151,7 @@ async function repub(argObj) {
 async function init(argObj) {
     let name = argObj.name;
 
-    argObj.repoFolder = argObj.repoFolder || (__dirname + "/../" + name);
+    argObj.repoFolder = argObj.repoFolder || process.cwd();
 
     let repoFolder = argObj.repoFolder + "/";
     if(!fs.existsSync(repoFolder + ".git")) {
