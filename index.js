@@ -36,6 +36,7 @@ yargs
     .option("gitSource", { alias: "g", describe: "A source PURELY for humans, used to make it easier for humans to find the original source." })
     .option("urlSource", { alias: "s", describe: "The source where the binaries are distributed, or the homepage of the project." })
     .option("showArgs", { describe: "Prints the arguments as we received them." })
+    .option("versionCommand", { describe: "Version argument which gets the version from the primary binary" })
 
 .command("repub [name]", "clones and then republishes the repo, not making any changes", () => {}, (argObj) => {
     repub(argObj);
@@ -205,6 +206,9 @@ require("child_process").execFileSync("node", args, { stdio: "inherit" });`
 
     packageObj.binaryNames = packageObj.binaryNames || [];
     packageObj.binaryNames = unique(packageObj.binaryNames.concat(argObj.binaryNames));
+
+    packageObj.versionCommand = argObj.versionCommand || packageObj.versionCommand;
+
     let binaryNames = packageObj.binaryNames;
 
 
@@ -278,7 +282,7 @@ ${sourcesEndTag}
     for(let binName of binaryNames) {
         let jsName = binName + ".js";
         if(binName === binaryNames[0] && binName !== name) {
-            packageObj.bin[name] = jsName
+            packageObj.bin[name] = jsName;
         }
         files.push(jsName);
         packageObj.bin[binName] = jsName;
@@ -465,7 +469,7 @@ async function add(argObj) {
             parts[index] = (+parts[index] || 0) + 1;
             newVersion = parts.join(".");
         } else if(!newVersion) {
-            let versionOutput = run(binaryPath, ["--version"]);
+            let versionOutput = run(binaryPath, [overConfig.versionCommand || "--version"]);
             newVersion = versionOutput.match(/([0-9]\.)*[0-9]/)[0];
         }
 
