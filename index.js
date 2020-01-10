@@ -479,6 +479,15 @@ async function add(argObj) {
         if(subConfig.version === newVersion) {
             versionUnchanged = true;
         }
+        
+        {
+            let versionParts = newVersion.split(".").slice(0, 3);
+            while(versionParts.length < 3) {
+                versionParts.push("0");
+            }
+            newVersion = versionParts.join(".");
+        }
+
         subConfig.version = newVersion;
 
         if(!subConfig.author) {
