@@ -1,6 +1,6 @@
 {
   "name": "binpub",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Utility for publishing binaries to npm.",
   "main": "index.js",
   "repository": "git@github.com:sliftist/binpub.git",
@@ -13,7 +13,7 @@
     "yargs": "^14.0.0"
   },
   "files": [
-    "./shim.js"
+    "shim.js"
   ],
   "bin": {
     "binpub": "index.js"
