@@ -16,6 +16,10 @@ Steps to setup overarching package:
 Steps to add binaries:
 1) `binpub add {packageName}`
 
+Steps for overarching repo to publish added binaries:
+1) `git pull`
+2) `npm publish`
+
 Requirements:
 1) npm has to be setup to be able to publish (npm adduser).
 2) git has to be setup to be able to push via ssh, and `git config user.name` and `git config user.email` must both be set up (`git config user.name 'preferred-user-name'`).
